@@ -1,0 +1,159 @@
+name: Windows build
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  NODE_VERSION: 24.16.0
+  NPM_VERSION: 11.13.0
+  DOTNET_VERSION: 10.0.303
+
+jobs:
+  verify:
+    name: Verify source
+    runs-on: windows-2025
+    timeout-minutes: 60
+    outputs:
+      artifact_name: ${{ steps.setup.outputs.name }}
+      sha256: ${{ steps.setup.outputs.sha256 }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Use the pinned npm version
+        shell: pwsh
+        run: npm install --global npm@${{ env.NPM_VERSION }}
+
+      - name: Check runtime versions
+        shell: pwsh
+        run: |
+          if ((node --version) -ne 'v24.16.0') { throw 'Unexpected Node.js version.' }
+          if ((npm --version) -ne '11.13.0') { throw 'Unexpected npm version.' }
+          if ((dotnet --version) -ne '10.0.303') { throw 'Unexpected .NET SDK version.' }
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run checks and tests
+        run: npm run verify
+
+      - name: Build application
+        run: npm run build
+
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $packageVersion = node -p "require('./package.json').version"
+          $tagVersion = $env:GITHUB_REF_NAME.Substring(1)
+          if ($packageVersion -ne $tagVersion) {
+            throw "Tag $env:GITHUB_REF_NAME does not match package version $packageVersion."
+          }
+
+      - name: Build single-file installer
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        run: npm run build:win
+
+      - name: Verify installer
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        id: setup
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem -LiteralPath 'release/setup' -File -Filter '*-Setup-x64.exe')
+          if ($files.Count -ne 1) {
+            throw "Expected exactly one Setup.exe, found $($files.Count)."
+          }
+          $selfTest = Start-Process -FilePath $files[0].FullName -ArgumentList '--self-test' -Wait -PassThru
+          if ($selfTest.ExitCode -ne 0) {
+            throw "Setup.exe self-test failed with exit code $($selfTest.ExitCode)."
+          }
+          $sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $files[0].FullName).Hash.ToLowerInvariant()
+          "name=$($files[0].Name)" >> $env:GITHUB_OUTPUT
+          "sha256=$sha256" >> $env:GITHUB_OUTPUT
+          "### Windows 安装包`n`n- 文件：``$($files[0].Name)```n- SHA-256：``$sha256``" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload installer for the release job
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-setup
+          path: release/setup/*-Setup-x64.exe
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download installer
+        uses: actions/download-artifact@v8
+        with:
+          name: windows-setup
+          path: release
+
+      - name: Verify downloaded installer
+        shell: bash
+        env:
+          EXPECTED_NAME: ${{ needs.verify.outputs.artifact_name }}
+          EXPECTED_SHA256: ${{ needs.verify.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          artifact="release/$EXPECTED_NAME"
+          test -f "$artifact"
+          actual_sha256="$(sha256sum "$artifact" | cut -d ' ' -f 1)"
+          test "$actual_sha256" = "$EXPECTED_SHA256"
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ARTIFACT_NAME: ${{ needs.verify.outputs.artifact_name }}
+          ARTIFACT_SHA256: ${{ needs.verify.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          upload_name="TiebaCleaner-${GITHUB_REF_NAME#v}-Setup-x64.exe"
+          mv "release/$ARTIFACT_NAME" "release/$upload_name"
+          upload_asset="release/$upload_name#$ARTIFACT_NAME"
+          cat > release-notes.md <<EOF
+          由 GitHub Actions 在标准 Windows 构建机上自动生成。
+
+          SHA-256: \`$ARTIFACT_SHA256\`
+
+          当前版本未进行商业代码签名，Windows SmartScreen 可能显示“未知发布者”。
+          EOF
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --title "贴吧清理助手 $GITHUB_REF_NAME" --notes-file release-notes.md
+            gh release upload "$GITHUB_REF_NAME" "$upload_asset" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$upload_asset" --verify-tag --title "贴吧清理助手 $GITHUB_REF_NAME" --notes-file release-notes.md
+          fi

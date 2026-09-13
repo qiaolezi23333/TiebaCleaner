@@ -1,0 +1,35 @@
+/node_modules/
+/out/
+/dist/
+/release/
+/release-final/
+/installer/bundle/artifacts/
+**/bin/
+**/obj/
+/.eslintcache
+/PROGRESS.md
+
+# Local application state and credentials
+/cookie
+/cookies
+/userData/
+/userdata/
+/.env
+/.env.*
+!/.env.example
+/.npmrc
+*.log
+*.log.*
+
+# Signing material must never enter source control
+*.pfx
+*.p12
+*.pem
+*.key
+*.jks
+*.keystore
+
+# Generated platform files
+/build/icon.icns
+.DS_Store
+Thumbs.db

@@ -1,0 +1,51 @@
+:root {
+  color: #263044;
+  background: #f5f7fb;
+  font-family: 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --brand: #4f7bea;
+  --brand-dark: #315fcf;
+  --brand-soft: #eef3ff;
+  --ink: #263044;
+  --muted: #778299;
+  --line: #e4e9f1;
+  --surface: #ffffff;
+  --canvas: #f5f7fb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  min-width: 860px;
+  min-height: 620px;
+  overflow: hidden;
+  color: var(--ink);
+  background: var(--canvas);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+svg {
+  flex: 0 0 auto;
+  vertical-align: middle;
+}

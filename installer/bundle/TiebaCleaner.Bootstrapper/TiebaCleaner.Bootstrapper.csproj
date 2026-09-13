@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+    <DebugType>embedded</DebugType>
+    <StartupObject>TiebaCleaner.Bootstrapper.Program</StartupObject>
+    <ApplicationIcon>..\..\..\build\icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>TiebaCleaner.Setup</AssemblyName>
+    <RootNamespace>TiebaCleaner.Bootstrapper</RootNamespace>
+    <Version Condition="'$(SetupVersion)' != ''">$(SetupVersion)</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(MsiPath)" LogicalName="TiebaCleaner.Payload.msi" Condition="'$(MsiPath)' != ''" />
+    <AssemblyMetadata Include="PayloadSha256" Value="$(PayloadSha256)" />
+  </ItemGroup>
+</Project>

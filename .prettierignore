@@ -1,0 +1,12 @@
+out
+dist
+release
+release-final
+node_modules
+**/bin
+**/obj
+installer/bundle/artifacts
+pnpm-lock.yaml
+LICENSE.md
+tsconfig.json
+tsconfig.*.json
